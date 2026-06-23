@@ -1,5 +1,6 @@
+# CI_TIMEOUT=15
 #!/bin/bash
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,17 +16,10 @@
 
 set -xeuo pipefail
 
-export CUDA_VISIBLE_DEVICES="0"
+REPO_ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
-TEST_FILE="tests/functional_tests/test_groups/diffusion/wan/test_wan_conversion.py"
-# Run all conversion tests in a single invocation so the class-scoped fixtures
-# (toy model creation, HF->Megatron import) are shared across tests.
-uv run coverage run \
-  --data-file=/opt/Megatron-Bridge/.coverage \
-  --source=/opt/Megatron-Bridge/ \
-  --parallel-mode \
-  -m pytest \
+uv run coverage run --data-file="${REPO_ROOT}/.coverage" --source="${REPO_ROOT}" --parallel-mode -m pytest \
   -o log_cli=true -o log_cli_level=INFO -v -s -x -m "not pleasefixme" --tb=short -rA \
-  ${TEST_FILE}::TestWanCheckpointConversion
-
+  tests/functional_tests/test_groups/models/exaone
 coverage combine -q
