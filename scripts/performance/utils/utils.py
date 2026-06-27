@@ -56,6 +56,7 @@ class WorkloadBaseConfig:
     cpu_offloading_num_layers: Optional[int] = None
     recompute_num_layers: Optional[int] = None
     recompute_modules: Optional[List[str]] = None
+    min_offloaded_tensor_size: Optional[int] = None
 
     # MoE configuration
     moe_flex_dispatcher_backend: Optional[str] = None

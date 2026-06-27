@@ -185,3 +185,9 @@ slurm*.out
 
 # UV package manager
 .uv/
+
+# results folder
+results/
+
+# bash scripts
+perf_bash_scripts/*

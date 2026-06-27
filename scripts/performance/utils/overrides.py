@@ -249,6 +249,8 @@ def set_workload_base_configs(cfg: ConfigContainer, settings: WorkloadBaseConfig
         cpu_offloading_num_layers=settings.cpu_offloading_num_layers,
         recompute_num_layers=settings.recompute_num_layers,
     )
+    if settings.min_offloaded_tensor_size is not None:
+        cfg.model.min_offloaded_tensor_size = settings.min_offloaded_tensor_size
     if settings.te_precision_config_file is not None:
         from megatron.core.quantization.utils import load_quantization_recipe
 
