@@ -185,3 +185,10 @@ slurm*.out
 
 # UV package manager
 .uv/
+
+# nt3_ultra dev workflow: perf-test outputs land under repo root via launch
+# scripts. They are run artifacts, not source. Logs from the dev workflow
+# scripts also stay local-only.
+/results/
+/perf_bash_scripts/**/results/
+/nt3_dev_workflow/logs/
