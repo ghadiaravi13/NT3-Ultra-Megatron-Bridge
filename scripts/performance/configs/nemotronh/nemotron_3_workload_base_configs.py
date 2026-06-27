@@ -159,7 +159,40 @@ NEMOTRON_3_SUPER_PRETRAIN_CONFIG_B200_NVFP4_V1 = replace(
 )
 
 
+# =============================================================================
+# Nemotron 3 Ultra Pretrain - V1
+# =============================================================================
+#
+# Mirrors the reference Megatron-LM GB300 launch script
+# (Megatron-LM-Private/examples/nt3/gb300_nt3.sh): 64 GB300 nodes x 4 GPUs = 256
+# GPUs, TP1 / PP1 / CP1 / EP64 / ETP1, GBS 256 / MBS 1, Megatron-FSDP (HSDP),
+# CuteDSL fused grouped MLP, HybridEP dispatcher, selective recompute of moe_act,
+# and CUDA graphs disabled.
+
+BASE_NEMOTRON_3_ULTRA_CONFIG = WorkloadBaseConfig(
+    num_gpus=256,
+    global_batch_size=256,
+    micro_batch_size=1,
+    tensor_model_parallel_size=1,
+    expert_tensor_parallel_size=1,
+    expert_model_parallel_size=64,
+    use_megatron_fsdp=True,
+    moe_flex_dispatcher_backend="hybridep",
+    cutedsl_fused_grouped_mlp=True,
+    cuda_graph_impl="none",
+    cuda_graph_scope=None,
+    recompute_modules=["moe_act"],
+)
+
+NEMOTRON_3_ULTRA_PRETRAIN_CONFIG_GB300_BF16_V1 = BASE_NEMOTRON_3_ULTRA_CONFIG
+NEMOTRON_3_ULTRA_PRETRAIN_CONFIG_GB300_FP8_MX_V1 = BASE_NEMOTRON_3_ULTRA_CONFIG
+NEMOTRON_3_ULTRA_PRETRAIN_CONFIG_GB300_NVFP4_V1 = BASE_NEMOTRON_3_ULTRA_CONFIG
+
+
 __all__ = [
+    "NEMOTRON_3_ULTRA_PRETRAIN_CONFIG_GB300_BF16_V1",
+    "NEMOTRON_3_ULTRA_PRETRAIN_CONFIG_GB300_FP8_MX_V1",
+    "NEMOTRON_3_ULTRA_PRETRAIN_CONFIG_GB300_NVFP4_V1",
     "NEMOTRON_3_NANO_PRETRAIN_CONFIG_GB300_BF16_V1",
     "NEMOTRON_3_NANO_PRETRAIN_CONFIG_GB300_FP8_MX_V1",
     "NEMOTRON_3_NANO_PRETRAIN_CONFIG_GB300_NVFP4_V1",
