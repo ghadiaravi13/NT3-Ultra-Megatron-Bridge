@@ -69,7 +69,7 @@ case "${mode}" in
     --bg|bg)
         sbatch --account="${ACCOUNT}" --partition="${PARTITION}" \
                --job-name=nt3_bake_container \
-               --nodes=1 --ntasks=1 --gres=gpu:1 --time=02:00:00 \
+               --nodes=1 --ntasks=1 --time=02:00:00 \
                --container-image="${SRC_IMG}" \
                --container-mounts=/lustre:/lustre \
                --container-writable \
@@ -84,7 +84,7 @@ case "${mode}" in
     *)
         srun --account="${ACCOUNT}" --partition="${PARTITION}" \
              --job-name=nt3_bake_container \
-             --nodes=1 --ntasks=1 --gres=gpu:1 --time=02:00:00 \
+             --nodes=1 --ntasks=1 --time=02:00:00 \
              --container-image="${SRC_IMG}" \
              --container-mounts=/lustre:/lustre \
              --container-writable \
