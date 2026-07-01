@@ -48,11 +48,11 @@ HF_TOKEN="${HF_TOKEN:?Environment variable HF_TOKEN is not set}"
 #     CONTAINER  := pre-baked nemo_26.06_nt3.sqsh with TE/cudnn-fe/cutlass-dsl
 #     installed into /opt/venv. No -cb needed.
 BAKED_CONTAINER="${BAKED_CONTAINER:-0}"
-LUSTRE_ROOT="${LUSTRE_ROOT:-/lustre/fsw/coreai_dlalgo_llm/rghadia/gb300_nt3_mbridge_release_26.06.01}"
+LUSTRE_ROOT="${LUSTRE_ROOT:-/lustre/fsw/portfolios/coreai/users/rghadia/gb300_nt3_mbridge_release_26.06.01}"
 if [ "${BAKED_CONTAINER}" = "1" ]; then
-  CONTAINER="${CONTAINER:-${LUSTRE_ROOT}/images/nemo_26.06_nt3.sqsh}"
+  CONTAINER="${CONTAINER:-${LUSTRE_ROOT}/images/nemo:26.06.01.rc0}"
 else
-  CONTAINER="${CONTAINER:-${LUSTRE_ROOT}/images/nemo_26.06.sqsh}"
+  CONTAINER="${CONTAINER:-${LUSTRE_ROOT}/images/nemo:26.06.01.rc0}"
 fi
 MBRIDGE_PATH="${MBRIDGE_PATH:-${LUSTRE_ROOT}/repos/Megatron-Bridge}"
 MLM_PATH="${MLM_PATH:-${LUSTRE_ROOT}/repos/Megatron-LM}"
@@ -66,7 +66,7 @@ if [ "${BAKED_CONTAINER}" != "1" ]; then
 fi
 
 ACCOUNT="${ACCOUNT:-coreai_dlalgo_llm}"
-PARTITION="${PARTITION:-gb300}"
+PARTITION="${PARTITION:-batch}"
 COMPUTE_DTYPE="${COMPUTE_DTYPE:-fp8_mx}"
 
 JOB_NAME="nemotron_3_ultra_gb300_${COMPUTE_DTYPE}"
@@ -74,7 +74,7 @@ RESULTS_DIR="${MBRIDGE_PATH}/results/${JOB_NAME}"
 
 # Default to dryrun for 256-GPU safety; require explicit DRYRUN=0 to submit.
 # (Opposite default from the toy script, where running cheaply is fine.)
-DRYRUN_FLAG="0"
+DRYRUN_FLAG=""
 if [ "${DRYRUN:-0}" = "1" ]; then
   DRYRUN_FLAG="--dryrun"
 fi
@@ -93,13 +93,17 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   --compute_dtype ${COMPUTE_DTYPE} \
   --config_variant v1 \
   --max_steps 100 \
-  --custom_mounts "/lustre:/lustre,${MBRIDGE_PATH}:/opt/Megatron-Bridge,${MLM_PATH}:/opt/Megatron-Bridge/3rdparty/Megatron-LM" \
+  --gres "gpu:4" \
   --additional_slurm_params "segment=16" \
   --packager none \
   --wandb_key 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 \
   --wandb_project_name Nemotron_3_Ultra_GB300_performance \
   --wandb_experiment_name nemotron_3_ultra_gb300_fp8mx \
   --hf_token ${HF_TOKEN} \
+  --enable_nsys \
+  --profiling_start_step 45 \
+  --profiling_stop_step 47 \
+  --profiling_ranks 0 \
   -E NCCL_IB_SL=1 \
   -E NCCL_IB_TIMEOUT=19 \
   -E UB_TIMEOUT=720 \
@@ -119,6 +123,7 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   -E NUM_OF_TOKENS_PER_CHUNK_COMBINE_API=128 \
   -E NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=64 \
   -E USE_MNNVL=1 \
+  --custom_mounts "${MBRIDGE_PATH}/debug_1bb35c/mcore_fsdp_adapter.py:/opt/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/distributed/fsdp/mcore_fsdp_adapter.py" \
   ${DRYRUN_FLAG} \
   "${CB_FLAG[@]}"
 
@@ -138,3 +143,6 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   #   --profiling_start_step 45 \
   #   --profiling_stop_step 47 \
   #   --profiling_ranks 0
+
+  # custom mount
+  # --custom_mounts "/lustre:/lustre,${MBRIDGE_PATH}:/opt/Megatron-Bridge,${MLM_PATH}:/opt/Megatron-Bridge/3rdparty/Megatron-LM" \

@@ -83,11 +83,11 @@ HF_TOKEN="${HF_TOKEN:?Environment variable HF_TOKEN is not set}"
 #     them. No venv activation needed — /etc/environment in the image already
 #     sets VIRTUAL_ENV=/opt/venv and prepends /opt/venv/bin to PATH.
 BAKED_CONTAINER="${BAKED_CONTAINER:-0}"
-LUSTRE_ROOT="${LUSTRE_ROOT:-/lustre/fsw/coreai_dlalgo_llm/rghadia/gb300_nt3_mbridge_release_26.06.01}"
+LUSTRE_ROOT="${LUSTRE_ROOT:-/lustre/fsw/portfolios/coreai/users/rghadia/gb300_nt3_mbridge_release_26.06.01}"
 if [ "${BAKED_CONTAINER}" = "1" ]; then
-  CONTAINER="${CONTAINER:-${LUSTRE_ROOT}/images/nemo_26.06_nt3.sqsh}"
+  CONTAINER="${CONTAINER:-${LUSTRE_ROOT}/images/nemo:26.06.01.rc0}"
 else
-  CONTAINER="${CONTAINER:-${LUSTRE_ROOT}/images/nemo_26.06.sqsh}"
+  CONTAINER="${CONTAINER:-${LUSTRE_ROOT}/images/nemo:26.06.01.rc0}"
 fi
 MBRIDGE_PATH="${MBRIDGE_PATH:-${LUSTRE_ROOT}/repos/Megatron-Bridge}"
 MLM_PATH="${MLM_PATH:-${LUSTRE_ROOT}/repos/Megatron-LM}"
@@ -102,7 +102,7 @@ if [ "${BAKED_CONTAINER}" != "1" ]; then
 fi
 
 ACCOUNT="${ACCOUNT:-coreai_dlalgo_llm}"
-PARTITION="${PARTITION:-gb300}"
+PARTITION="${PARTITION:-batch}"
 COMPUTE_DTYPE="${COMPUTE_DTYPE:-fp8_mx}"
 
 JOB_NAME="nemotron_3_ultra_gb300_toy_${COMPUTE_DTYPE}"
@@ -129,11 +129,11 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   --compute_dtype ${COMPUTE_DTYPE} \
   --config_variant v1 \
   --max_steps 50 \
-  --expert_model_parallel_size 8 \
+  --expert_model_parallel_size 4 \
   --global_batch_size 8 \
   --micro_batch_size 1 \
-  --custom_mounts "/lustre:/lustre,${MBRIDGE_PATH}:/opt/Megatron-Bridge,${MLM_PATH}:/opt/Megatron-Bridge/3rdparty/Megatron-LM" \
   --additional_slurm_params "segment=2" \
+  --gres "gpu:4" \
   --packager none \
   --hf_token ${HF_TOKEN} \
   -E NCCL_IB_SL=1 \
@@ -153,16 +153,24 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   -E NCCL_PROTO=simple \
   -E NCCL_NVLS_ENABLE=0 \
   -E NUM_OF_TOKENS_PER_CHUNK_COMBINE_API=128 \
-  -E NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=8 \
+  -E NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=4 \
   -E USE_MNNVL=1 \
   ${DRYRUN_FLAG} \
-  model.num_layers=2 \
-  model.hybrid_layer_pattern=ME \
+  model.num_layers=8 \
+  model.hybrid_layer_pattern=MEMEM*EM \
+  ddp.num_distributed_optimizer_instances=2 \
+  ddp.outer_dp_sharding_strategy=optim \
   model.num_moe_experts=32 \
   model.moe_router_topk=4 \
-  ddp.num_distributed_optimizer_instances=1 \
-  ddp.outer_dp_sharding_strategy=no_shard \
+  --custom_mounts "${MBRIDGE_PATH}/debug_1bb35c/mcore_fsdp_adapter.py:/opt/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/distributed/fsdp/mcore_fsdp_adapter.py" \
   "${CB_FLAG[@]}"
+  # ^^^ Patched mcore_fsdp_adapter.py: enables the fine-grained param
+  # all-gather *backward* hook for MXFP8 (in addition to MoE-overlap).
+  # Without this patch, Nemotron 3 Ultra's MTP `eh_proj` layer crashes at
+  # backward with cuBLAS "Pointer to A matrix data cannot be null" because
+  # its FP8 columnwise weight buffer is reclaimed between forward and
+  # backward. See repos/Megatron-Bridge/debug_1bb35c/README.md for the full
+  # writeup. Remove this bind-mount once the fix is upstreamed to Megatron-LM.
   # model.recompute_granularity=null \
   # 'model.recompute_modules=[]' \
   # IMPORTANT: keep -cb as the LAST flag. argument_parser.py defines -cb /
@@ -182,3 +190,7 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   #   --profiling_start_step 45 \
   #   --profiling_stop_step 48 \
   #   --profiling_ranks 0
+
+
+  # custom mounts for local changes
+  # --custom_mounts "/lustre:/lustre,${MBRIDGE_PATH}:/opt/Megatron-Bridge,${MLM_PATH}:/opt/Megatron-Bridge/3rdparty/Megatron-LM" \
