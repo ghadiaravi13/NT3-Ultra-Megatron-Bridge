@@ -74,7 +74,7 @@ RESULTS_DIR="${MBRIDGE_PATH}/results/${JOB_NAME}"
 
 # Default to dryrun for 256-GPU safety; require explicit DRYRUN=0 to submit.
 # (Opposite default from the toy script, where running cheaply is fine.)
-DRYRUN_FLAG="0"
+DRYRUN_FLAG=""
 if [ "${DRYRUN:-0}" = "1" ]; then
   DRYRUN_FLAG="--dryrun"
 fi
@@ -100,6 +100,10 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   --wandb_project_name Nemotron_3_Ultra_GB300_performance \
   --wandb_experiment_name nemotron_3_ultra_gb300_fp8mx \
   --hf_token ${HF_TOKEN} \
+  --enable_nsys \
+  --profiling_start_step 45 \
+  --profiling_stop_step 47 \
+  --profiling_ranks 0 \
   -E NCCL_IB_SL=1 \
   -E NCCL_IB_TIMEOUT=19 \
   -E UB_TIMEOUT=720 \

@@ -129,7 +129,7 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   --compute_dtype ${COMPUTE_DTYPE} \
   --config_variant v1 \
   --max_steps 50 \
-  --expert_model_parallel_size 8 \
+  --expert_model_parallel_size 4 \
   --global_batch_size 8 \
   --micro_batch_size 1 \
   --custom_mounts "/lustre:/lustre,${MBRIDGE_PATH}:/opt/Megatron-Bridge,${MLM_PATH}:/opt/Megatron-Bridge/3rdparty/Megatron-LM" \
@@ -153,15 +153,15 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   -E NCCL_PROTO=simple \
   -E NCCL_NVLS_ENABLE=0 \
   -E NUM_OF_TOKENS_PER_CHUNK_COMBINE_API=128 \
-  -E NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=8 \
+  -E NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=4 \
   -E USE_MNNVL=1 \
   ${DRYRUN_FLAG} \
   model.num_layers=2 \
   model.hybrid_layer_pattern=ME \
   model.num_moe_experts=32 \
   model.moe_router_topk=4 \
-  ddp.num_distributed_optimizer_instances=1 \
-  ddp.outer_dp_sharding_strategy=no_shard \
+  ddp.num_distributed_optimizer_instances=2 \
+  ddp.outer_dp_sharding_strategy=optim \
   "${CB_FLAG[@]}"
   # model.recompute_granularity=null \
   # 'model.recompute_modules=[]' \
@@ -182,3 +182,9 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   #   --profiling_start_step 45 \
   #   --profiling_stop_step 48 \
   #   --profiling_ranks 0
+
+  # debug flags
+  # -E NVTE_DEBUG=1 \
+  # -E NVTE_DEBUG_LEVEL=2 \
+  # -E CUBLASLT_LOG_LEVEL=5 \
+  # -E CUBLASLT_LOG_MASK=15 \
