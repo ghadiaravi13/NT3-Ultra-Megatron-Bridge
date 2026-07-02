@@ -1,0 +1,41 @@
+# Sourced by interactive bash inside the unpatched nemo:26.06 container.
+# Activates the /lustre dev venv, wires ccache (incl. libhiredis bundle), and
+# pre-exports LUSTRE_ROOT / REPOS_ROOT so rebuild scripts work without env
+# wrangling. Used by _interactive_gb300.sh.
+[[ -f /etc/bash.bashrc ]] && source /etc/bash.bashrc
+[[ -f ~/.bashrc ]] && source ~/.bashrc 2>/dev/null || true
+
+export LUSTRE_ROOT=/lustre/fsw/coreai_dlalgo_llm/rghadia/gb300_nt3_mbridge_release_26.06.01
+export REPOS_ROOT=${LUSTRE_ROOT}/repos
+export VENV_DIR=${LUSTRE_ROOT}/venvs/nemotron_dev
+export CCACHE_DIR=${LUSTRE_ROOT}/ccache
+
+source ${VENV_DIR}/bin/activate
+
+# Wire ccache (same logic as rebuild_in_venv.sh; see cherry-pick.md §2).
+CCACHE_TOOLS="${LUSTRE_ROOT}/tools/ccache"
+if [[ -d "${CCACHE_TOOLS}/lib" ]]; then
+    export LD_LIBRARY_PATH="${CCACHE_TOOLS}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+fi
+if [[ -x "${CCACHE_TOOLS}/bin/ccache" ]] \
+   && "${CCACHE_TOOLS}/bin/ccache" --version >/dev/null 2>&1; then
+    export PATH="${CCACHE_TOOLS}/compiler-shims:${CCACHE_TOOLS}/bin:${PATH}"
+fi
+
+PS1='[gb300:venv] \w\$ '
+
+cat <<BANNER
+=================================================================
+ Interactive GB300 dev shell -- venv activated, ccache wired.
+   LUSTRE_ROOT = ${LUSTRE_ROOT}
+   REPOS_ROOT  = ${REPOS_ROOT}
+   VENV_DIR    = ${VENV_DIR}
+   python      = $(which python)
+   ccache      = $(which ccache 2>/dev/null || echo "(not on PATH)")
+ Common commands:
+   bash \${LUSTRE_ROOT}/dev_workflow/rebuild_in_venv.sh <repo>
+   bash \${LUSTRE_ROOT}/dev_workflow/_bump_cutlass_dsl.sh
+   bash \${LUSTRE_ROOT}/dev_workflow/verify_imports.sh
+ \`exit\` releases the allocation.
+=================================================================
+BANNER

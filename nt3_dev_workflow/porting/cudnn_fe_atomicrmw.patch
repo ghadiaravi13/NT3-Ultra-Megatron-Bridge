@@ -1,0 +1,183 @@
+diff --git a/python/cudnn/deepseek_sparse_attention/utils/sm90/primitives.py b/python/cudnn/deepseek_sparse_attention/utils/sm90/primitives.py
+index f428702..ff7e602 100644
+--- a/python/cudnn/deepseek_sparse_attention/utils/sm90/primitives.py
++++ b/python/cudnn/deepseek_sparse_attention/utils/sm90/primitives.py
+@@ -156,7 +156,8 @@ def logf(a: float | Float32, *, loc=None, ip=None) -> Float32:
+ @dsl_user_op
+ def atomic_add_fp32(a: float | Float32, gmem_ptr: cute.Pointer, *, loc=None, ip=None) -> None:
+     """Scalar f32 atomicAdd: atomically adds `a` to the f32 value at `gmem_ptr`."""
+-    nvvm.atomicrmw(op=nvvm.AtomicOpKind.FADD, ptr=gmem_ptr.llvm_ptr, a=Float32(a).ir_value())
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
++    nvvm.atomicrmw(T.f32(), op=nvvm.AtomicOpKind.FADD, ptr=gmem_ptr.llvm_ptr, a=Float32(a).ir_value())
+ 
+ 
+ @dsl_user_op
+diff --git a/python/cudnn/discrete_grouped_gemm/discrete_kernel_utils.py b/python/cudnn/discrete_grouped_gemm/discrete_kernel_utils.py
+index 992747d..133a710 100644
+--- a/python/cudnn/discrete_grouped_gemm/discrete_kernel_utils.py
++++ b/python/cudnn/discrete_grouped_gemm/discrete_kernel_utils.py
+@@ -329,7 +329,9 @@ def atomic_max_float32(
+ ) -> Float32:
+     value_int = llvm.bitcast(T.i32(), value.ir_value(loc=loc, ip=ip), loc=loc, ip=ip)
+ 
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+     old_value_int = nvvm.atomicrmw(
++        T.i32(),
+         op=cutlass._mlir.dialects.nvvm.AtomicOpKind.MAX,
+         ptr=ptr,
+         a=value_int,
+@@ -348,7 +350,9 @@ def atomic_add_float32(
+     ip=None,
+ ) -> Float32:
+     """Atomic FP32 addition in global memory (used for dprob gradient accumulation)."""
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+     old_value = nvvm.atomicrmw(
++        T.f32(),
+         op=AtomicOpKind.FADD,
+         ptr=ptr,
+         a=value.ir_value(loc=loc, ip=ip),
+diff --git a/python/cudnn/discrete_grouped_gemm/moe_persistent_scheduler.py b/python/cudnn/discrete_grouped_gemm/moe_persistent_scheduler.py
+index a966d0b..9b1b1d4 100644
+--- a/python/cudnn/discrete_grouped_gemm/moe_persistent_scheduler.py
++++ b/python/cudnn/discrete_grouped_gemm/moe_persistent_scheduler.py
+@@ -59,7 +59,9 @@ def atomic_add_i32(
+     ip=None,
+ ) -> Int32:
+     """Perform an atomic add on an int32 value in global memory."""
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+     old_value = nvvm.atomicrmw(
++        T.i32(),
+         op=AtomicOpKind.ADD,
+         ptr=ptr,
+         a=value.ir_value(loc=loc, ip=ip),
+diff --git a/python/cudnn/gemm_amax/dense_blockscaled_gemm_persistent_amax.py b/python/cudnn/gemm_amax/dense_blockscaled_gemm_persistent_amax.py
+index bf2985c..e55f9ea 100644
+--- a/python/cudnn/gemm_amax/dense_blockscaled_gemm_persistent_amax.py
++++ b/python/cudnn/gemm_amax/dense_blockscaled_gemm_persistent_amax.py
+@@ -1328,7 +1328,9 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
+                     # Global atomic max (accumulates across all tiles for final tensor amax)
+                     # Since we compute absolute values, all values are non-negative
+                     _value_int = llvm.bitcast(T.i32(), block_amax.ir_value(), loc=None, ip=None)
++                    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+                     _old_value_int = nvvm.atomicrmw(
++                        T.i32(),
+                         op=nvvm.AtomicOpKind.MAX,
+                         ptr=mAmax.iterator.llvm_ptr,
+                         a=_value_int,
+diff --git a/python/cudnn/gemm_dsrelu/dense_blockscaled_gemm_persistent_dsrelu_quant.py b/python/cudnn/gemm_dsrelu/dense_blockscaled_gemm_persistent_dsrelu_quant.py
+index 66f7d6d..6dc1931 100644
+--- a/python/cudnn/gemm_dsrelu/dense_blockscaled_gemm_persistent_dsrelu_quant.py
++++ b/python/cudnn/gemm_dsrelu/dense_blockscaled_gemm_persistent_dsrelu_quant.py
+@@ -54,7 +54,9 @@ def atomic_add_float32(
+     loc=None,
+     ip=None,
+ ) -> Float32:
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+     old_value = nvvm.atomicrmw(
++        T.f32(),
+         AtomicOpKind.FADD,
+         ptr,
+         value.ir_value(loc=loc, ip=ip),
+diff --git a/python/cudnn/gemm_swiglu/dense_blockscaled_gemm_persistent_swiglu_interleaved_quant.py b/python/cudnn/gemm_swiglu/dense_blockscaled_gemm_persistent_swiglu_interleaved_quant.py
+index 71d225b..b6b6e54 100644
+--- a/python/cudnn/gemm_swiglu/dense_blockscaled_gemm_persistent_swiglu_interleaved_quant.py
++++ b/python/cudnn/gemm_swiglu/dense_blockscaled_gemm_persistent_swiglu_interleaved_quant.py
+@@ -1704,7 +1704,9 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
+                             loc=None,
+                             ip=None,
+                         )
++                        # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+                         _old_value_int = cutlass._mlir.dialects.nvvm.atomicrmw(
++                            cutlass.cutlass_dsl.T.i32(),
+                             op=cutlass._mlir.dialects.nvvm.AtomicOpKind.MAX,
+                             ptr=mAmax_tensor.iterator.llvm_ptr,
+                             a=_value_int,
+diff --git a/python/cudnn/grouped_gemm/moe_kernel_helpers.py b/python/cudnn/grouped_gemm/moe_kernel_helpers.py
+index ab41414..4b15a7f 100644
+--- a/python/cudnn/grouped_gemm/moe_kernel_helpers.py
++++ b/python/cudnn/grouped_gemm/moe_kernel_helpers.py
+@@ -311,7 +311,9 @@ def atomic_max_float32(
+ ) -> Float32:
+     value_int = llvm.bitcast(T.i32(), value.ir_value(loc=loc, ip=ip), loc=loc, ip=ip)
+ 
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+     old_value_int = nvvm.atomicrmw(
++        T.i32(),
+         op=cutlass._mlir.dialects.nvvm.AtomicOpKind.MAX,
+         ptr=ptr,
+         a=value_int,
+@@ -330,7 +332,9 @@ def atomic_add_float32(
+     ip=None,
+ ) -> Float32:
+     """Atomic FP32 addition in global memory (used for dprob gradient accumulation)."""
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+     old_value = nvvm.atomicrmw(
++        T.f32(),
+         op=AtomicOpKind.FADD,
+         ptr=ptr,
+         a=value.ir_value(loc=loc, ip=ip),
+diff --git a/python/cudnn/grouped_gemm/moe_persistent_scheduler.py b/python/cudnn/grouped_gemm/moe_persistent_scheduler.py
+index bab6d92..4676111 100644
+--- a/python/cudnn/grouped_gemm/moe_persistent_scheduler.py
++++ b/python/cudnn/grouped_gemm/moe_persistent_scheduler.py
+@@ -59,7 +59,12 @@ def atomic_add_i32(
+     ip=None,
+ ) -> Int32:
+     """Perform an atomic add on an int32 value in global memory."""
++    # LOCAL PATCH (cherry-pick.md §7.4): cudnn-fe 1.24.1 and 1.25.0 both omit
++    # the required result-type arg in nvvm.atomicrmw, which fails against the
++    # cutlass-dsl 4.5.0 binding `def atomicrmw(res, op, ptr, a, ...)`. Filed
++    # as a follow-up upstream; remove this comment when cudnn-fe ships a fix.
+     old_value = nvvm.atomicrmw(
++        T.i32(),
+         op=AtomicOpKind.ADD,
+         ptr=ptr,
+         a=value.ir_value(loc=loc, ip=ip),
+diff --git a/python/cudnn/grouped_gemm/utils.py b/python/cudnn/grouped_gemm/utils.py
+index 1e58680..b48986a 100644
+--- a/python/cudnn/grouped_gemm/utils.py
++++ b/python/cudnn/grouped_gemm/utils.py
+@@ -75,7 +75,9 @@ def atomic_add_i32(
+     ip=None,
+ ) -> Int32:
+     """Perform an atomic add on an int32 value in global memory."""
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+     old_value = nvvm.atomicrmw(
++        T.i32(),
+         op=AtomicOpKind.ADD,
+         ptr=ptr,
+         a=value.ir_value(loc=loc, ip=ip),
+@@ -254,7 +256,9 @@ def atomic_max_float32(
+     """
+     value_int = llvm.bitcast(T.i32(), value.ir_value(loc=loc, ip=ip), loc=loc, ip=ip)
+ 
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+     old_value_int = nvvm.atomicrmw(
++        T.i32(),
+         op=cutlass._mlir.dialects.nvvm.AtomicOpKind.MAX,
+         ptr=ptr,
+         a=value_int,
+@@ -278,7 +282,9 @@ def atomic_add_float32(
+     :param value: The float32 value to add
+     :return: The old value at the memory location
+     """
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
+     old_value = nvvm.atomicrmw(
++        T.f32(),
+         op=cutlass._mlir.dialects.nvvm.AtomicOpKind.FADD,
+         ptr=ptr,
+         a=value.ir_value(loc=loc, ip=ip),
+diff --git a/python/cudnn/sdpa/utils.py b/python/cudnn/sdpa/utils.py
+index a1210a5..bd8ab42 100644
+--- a/python/cudnn/sdpa/utils.py
++++ b/python/cudnn/sdpa/utils.py
+@@ -455,7 +455,8 @@ def fadd_reduce(x: cute.TensorSSA, init_val: float | Float32 | None = None, arch
+ @dsl_user_op
+ def atomic_add_fp32(a: float | Float32, gmem_ptr: cute.Pointer, *, loc=None, ip=None) -> None:
+     """Wrapper of atomic add for fp32."""
+-    nvvm.atomicrmw(op=nvvm.AtomicOpKind.FADD, ptr=gmem_ptr.llvm_ptr, a=Float32(a).ir_value(), loc=loc, ip=ip)
++    # LOCAL PATCH (cherry-pick.md §7.4): add missing res arg for cutlass-dsl 4.5.0.
++    nvvm.atomicrmw(T.f32(), op=nvvm.AtomicOpKind.FADD, ptr=gmem_ptr.llvm_ptr, a=Float32(a).ir_value(), loc=loc, ip=ip)
+ 
+ 
+ @dsl_user_op

@@ -119,6 +119,11 @@ def main():
         forward_step_func = WanForwardStep(mode=args.task)
     else:
         forward_step_func = forward_step
+    
+    # Stale AccumulateGrad stream refs from warmup iterations invalidate
+    # full-iteration graph capture on the side capture stream (pytorch#180090).
+    if args.cuda_graph_impl != "none" and hasattr(torch.autograd.graph, "set_override_stale_capture_stream"):
+        torch.autograd.graph.set_override_stale_capture_stream(True)
 
     pretrain(config=recipe, forward_step_func=forward_step_func)
 

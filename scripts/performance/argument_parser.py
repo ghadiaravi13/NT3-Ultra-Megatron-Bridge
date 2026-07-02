@@ -24,7 +24,7 @@ from nemo_run.config import get_nemorun_home
 logger: logging.Logger = logging.getLogger(__name__)
 
 DEFAULT_NEMO_HOME = os.getenv("NEMO_HOME", Path.home() / ".cache" / "nemo")
-VALID_CUDA_GRAPH_IMPLS = ["none", "local", "transformer_engine"]
+VALID_CUDA_GRAPH_IMPLS = ["none", "local", "transformer_engine", "full_iteration"]
 VALID_CUDA_GRAPH_SCOPES = ["full_iteration", "attn", "mlp", "moe", "moe_router", "moe_preprocess", "mamba"]
 
 NUM_GPUS_PER_NODE_MAP = {
@@ -100,7 +100,12 @@ def is_cuda_graph_impl_valid(arg):
 
 def is_cuda_graph_scope_valid(arg):
     """Validate the CUDA graph scope argument."""
-    args = arg.split(",")
+    # Allow an explicit empty scope (e.g. "" or "[]") to mean "no scoped
+    # modules", which is required for full-iteration CUDA graphs.
+    stripped = arg.strip().strip("[]").strip()
+    if stripped == "":
+        return []
+    args = [a.strip() for a in stripped.split(",")]
     if all(a in VALID_CUDA_GRAPH_SCOPES for a in args):
         return args
     else:
