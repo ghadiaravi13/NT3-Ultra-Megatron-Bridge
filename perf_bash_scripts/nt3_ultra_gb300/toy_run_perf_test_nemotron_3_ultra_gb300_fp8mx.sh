@@ -83,7 +83,7 @@ HF_TOKEN="${HF_TOKEN:?Environment variable HF_TOKEN is not set}"
 #     them. No venv activation needed — /etc/environment in the image already
 #     sets VIRTUAL_ENV=/opt/venv and prepends /opt/venv/bin to PATH.
 BAKED_CONTAINER="${BAKED_CONTAINER:-0}"
-LUSTRE_ROOT="${LUSTRE_ROOT:-/lustre/fsw/portfolios/coreai/users/rghadia/gb300_nt3_mbridge_release_26.06.01}"
+LUSTRE_ROOT="${LUSTRE_ROOT:-/lustre/fsw/coreai_dlalgo_llm/rghadia/gb300_nt3_mbridge_release_26.06.01}"
 if [ "${BAKED_CONTAINER}" = "1" ]; then
   CONTAINER="${CONTAINER:-${LUSTRE_ROOT}/images/nemo:26.06.01.rc0}"
 else
@@ -102,7 +102,7 @@ if [ "${BAKED_CONTAINER}" != "1" ]; then
 fi
 
 ACCOUNT="${ACCOUNT:-coreai_dlalgo_llm}"
-PARTITION="${PARTITION:-batch}"
+PARTITION="${PARTITION:-gb300}"
 COMPUTE_DTYPE="${COMPUTE_DTYPE:-fp8_mx}"
 
 JOB_NAME="nemotron_3_ultra_gb300_toy_${COMPUTE_DTYPE}"
@@ -133,7 +133,6 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   --global_batch_size 8 \
   --micro_batch_size 1 \
   --additional_slurm_params "segment=2" \
-  --gres "gpu:4" \
   --packager none \
   --hf_token ${HF_TOKEN} \
   -E NCCL_IB_SL=1 \
@@ -156,13 +155,17 @@ uv run --no-project --with nemo-run --with numpy python ${MBRIDGE_PATH}/scripts/
   -E NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=4 \
   -E USE_MNNVL=1 \
   ${DRYRUN_FLAG} \
+  --enable_nsys \
+  --profiling_start_step 45 \
+  --profiling_stop_step 47 \
+  --profiling_ranks 0 \
   model.num_layers=8 \
   model.hybrid_layer_pattern=MEMEM*EM \
   ddp.num_distributed_optimizer_instances=2 \
   ddp.outer_dp_sharding_strategy=optim \
   model.num_moe_experts=32 \
   model.moe_router_topk=4 \
-  --custom_mounts "${MBRIDGE_PATH}/debug_1bb35c/mcore_fsdp_adapter.py:/opt/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/distributed/fsdp/mcore_fsdp_adapter.py" \
+  --custom_mounts "/lustre:/lustre,${MBRIDGE_PATH}:/opt/Megatron-Bridge,${MLM_PATH}:/opt/Megatron-Bridge/3rdparty/Megatron-LM" \
   "${CB_FLAG[@]}"
   # ^^^ Patched mcore_fsdp_adapter.py: enables the fine-grained param
   # all-gather *backward* hook for MXFP8 (in addition to MoE-overlap).
