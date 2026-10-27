@@ -556,6 +556,40 @@ def deepseek_v3_pretrain_256gpu_gb300_fp8mx_hsdp_config() -> ConfigContainer:
     return cfg
 
 
+def deepseek_v3_pretrain_256gpu_gb300_fp8mx_fsdp_config() -> ConfigContainer:
+    """DeepSeek V3 pretrain: 256× GB300, MXFP8, Megatron FSDP."""
+    cfg = deepseek_v3_pretrain_64gpu_gb300_fp8mx_fsdp_config()
+    cfg.train.global_batch_size = 1024
+
+    # EP64 on 256 GPUs leaves a 4-way expert-DP group spanning NVLink domains. A single optimizer
+    # instance keeps the experts sharded across it; 4 instances (HSDP) would leave them unsharded.
+    cfg.ddp.megatron_fsdp_version = 1
+    cfg.ddp.outer_dp_sharding_strategy = "no_shard"
+    cfg.ddp.num_distributed_optimizer_instances = 1
+    # Keep process settings next to the recipe so users can see the exact benchmark environment.
+    cfg.env_vars = {
+        **COMMON_PERF_ENV_VARS,
+        # CUDA stream scheduling for this model and parallel layout.
+        "CUDA_DEVICE_MAX_CONNECTIONS": 32,
+        # CUDA graph and allocator behavior for this recipe.
+        "NCCL_GRAPH_REGISTER": 0,
+        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+        "TORCH_NCCL_AVOID_RECORD_STREAMS": 1,
+        # NCCL user-buffer and launch settings.
+        "NCCL_NVLS_ENABLE": 0,
+        # NCCL EP dispatcher mode and one GPU per rank.
+        "NCCL_EP_HT_EM_PULL_PUSH": 1,
+        # Transformer Engine overlap settings for this model.
+        "NVTE_BWD_LAYERNORM_SM_MARGIN": 20,
+        "NVTE_CPU_OFFLOAD_V1": 1,
+        "NVTE_FWD_LAYERNORM_SM_MARGIN": 20,
+        # Use cuDNN LayerNorm for this measured baseline.
+        "NVTE_NORM_BWD_USE_CUDNN": 1,
+        "NVTE_NORM_FWD_USE_CUDNN": 1,
+    }
+    return cfg
+
+
 def deepseek_v3_pretrain_256gpu_gb300_fp8mx_large_scale_config() -> ConfigContainer:
     """DeepSeek V3 pretrain: 256× GB300, MXFP8, large-scale proxy (PP=4, VP=4, EP=64)."""
     cfg = deepseek_v3_pretrain_256gpu_gb300_fp8mx_config()
