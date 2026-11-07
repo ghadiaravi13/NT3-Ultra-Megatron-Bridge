@@ -520,33 +520,12 @@ def _build_nemotron_3_nano_gb200_mxfp8() -> ConfigContainer:
 
 
 def nemotron_3_nano_pretrain_8gpu_gb200_fp8mx_config() -> ConfigContainer:
-    """Nemotron 3 Nano pretrain: 8× GB200, MXFP8, EP1 with Megatron-FSDP-sharded experts."""
+    """Nemotron 3 Nano pretrain: 8× GB200, MXFP8 with full-iteration CUDA graph."""
     cfg = _build_nemotron_3_nano_gb200_mxfp8()
     cfg.model.use_transformer_engine_op_fuser = True
     cfg.model.moe_mlp_glu_interleave_size = 32
     cfg.mixed_precision.fp8_dot_product_attention = True
-    # _enable_nemotron_3_5_lightning_full_iteration(cfg)
-
-    # Experts: params, grads, and optimizer state sharded over all 8 DP ranks.
-    # Dense weights: replicated, only optimizer state sharded.
-    cfg.model.expert_model_parallel_size = 1
-    # With TPxEP=1 the alltoall dispatcher only permutes locally.
-    cfg.model.moe_token_dispatcher_type = "alltoall"
-    cfg.ddp.use_megatron_fsdp = True
-    cfg.ddp.num_distributed_optimizer_instances = 1
-    cfg.ddp.data_parallel_sharding_strategy = "optim"
-    cfg.ddp.expert_data_parallel_sharding_strategy = "optim_grads_params"
-    cfg.ddp.outer_dp_sharding_strategy = "no_shard"
-    cfg.ddp.average_in_collective = False
-    cfg.ddp.keep_fp8_transpose_cache = False
-    cfg.ddp.reuse_grad_buf_for_mxfp8_param_ag = False
-    cfg.mixed_precision.reuse_grad_buf_for_mxfp8_param_ag = False
-    cfg.optimizer.reuse_grad_buf_for_mxfp8_param_ag = False
-    cfg.model.init_model_with_meta_device = True
-    cfg.checkpoint.ckpt_format = "fsdp_dtensor"
-    # Megatron FSDP registers module hooks that Transformer Engine CUDA graph capture rejects.
-    cfg.model.cuda_graph_impl = "none"
-    set_cuda_graph_modules(cfg.model, [])
+    _enable_nemotron_3_5_lightning_full_iteration(cfg)
     # Keep process settings next to the recipe so users can see the exact benchmark environment.
     cfg.env_vars = {
         **COMMON_PERF_ENV_VARS,
