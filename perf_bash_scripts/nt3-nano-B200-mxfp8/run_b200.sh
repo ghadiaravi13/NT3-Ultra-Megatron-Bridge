@@ -6,7 +6,8 @@
 #   - NCCL-EP dispatcher, full-iteration CUDA graph, shared-expert overlap, cuDNN Mamba-2 backend
 #
 # The cuDNN Mamba-2 backend needs NVIDIA/Megatron-LM#9086 and nvidia-cudnn-frontend>=1.33.0:
-#   - Image built from docker/Dockerfile.ci: both are baked in; leave MLM_PATH and CUDNN_FE_PATH unset.
+#   - Image built from docker/Dockerfile.ci, or from a NeMo container with ./build_container.sh (no Docker
+#     needed): both are baked in; leave MLM_PATH and CUDNN_FE_PATH unset.
 #   - Stock NeMo container: patch the submodule checkout, then overlay it and an x86_64 cudnn-frontend:
 #       bash docker/common/patch_megatron_lm.sh 3rdparty/Megatron-LM docker/patches/megatron-lm-cudnn-mamba2.patch
 #       pip download --no-deps --only-binary=:all: --python-version 3.12 --platform manylinux_2_28_x86_64 \
@@ -19,7 +20,7 @@ set -eu
 
 HF_TOKEN="${HF_TOKEN:?Environment variable HF_TOKEN is not set}"
 WANDB_KEY="${WANDB_KEY:?Environment variable WANDB_KEY is not set}"
-CONTAINER="${CONTAINER:?Set CONTAINER to an image built from docker/Dockerfile.ci, or a NeMo container plus overlays}"
+CONTAINER="${CONTAINER:?Set CONTAINER to an image built from docker/Dockerfile.ci or ./build_container.sh, or a NeMo container plus overlays}"
 
 MBRIDGE_PATH="${MBRIDGE_PATH:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)}"
 MLM_PATH="${MLM_PATH:-}"
@@ -31,7 +32,7 @@ if [ -n "${CUSTOM_MOUNTS}" ]; then
   MOUNT_ARGS=(--custom_mounts "${CUSTOM_MOUNTS}")
 fi
 
-ACCOUNT="${ACCOUNT:-coreai_dlalgo_llm}"
+ACCOUNT="${ACCOUNT:-my_slurm_account}"
 PARTITION="${PARTITION:-batch}"
 COMPUTE_DTYPE="${COMPUTE_DTYPE:-fp8_mx}"
 
@@ -48,7 +49,6 @@ uv run --no-project --with nemo-run --with numpy python "${MBRIDGE_PATH}/scripts
   --account "${ACCOUNT}" \
   --container_image "${CONTAINER}" \
   --partition "${PARTITION}" \
-  --gres "gpu:8" \
   --model_family_name nemotronh \
   --model_recipe_name nemotron_3_nano \
   --log_dir "${RESULTS_DIR}" \
@@ -56,7 +56,7 @@ uv run --no-project --with nemo-run --with numpy python "${MBRIDGE_PATH}/scripts
   --gpus_per_node 8 \
   --config_variant v1 \
   --gpu b200 \
-  --time_limit "00:30:00" \
+  --time_limit "00:45:00" \
   --compute_dtype "${COMPUTE_DTYPE}" \
   --max_steps 100 \
   --packager none \

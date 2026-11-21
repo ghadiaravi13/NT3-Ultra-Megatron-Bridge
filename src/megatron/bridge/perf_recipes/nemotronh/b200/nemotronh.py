@@ -299,6 +299,10 @@ def nemotron_3_nano_pretrain_8gpu_b200_fp8mx_config() -> ConfigContainer:
     # cuDNN frontend CuTe DSL Mamba-2 conv + scan; needs nvidia-cudnn-frontend>=1.33.0.
     cfg.model.mamba_kernel_backend = "cudnn"
 
+    # Each rank consumes 32 microbatches per step (GBS 512 / DP 8 / MBS 2). Buffer a full step across the
+    # 8 dataloader workers so the host does not stall on data before every full-iteration graph launch.
+    cfg.dataset.prefetch_factor = 4
+
     # Keep process settings next to the recipe so users can see the exact benchmark environment.
     cfg.env_vars = {
         **COMMON_PERF_ENV_VARS,
