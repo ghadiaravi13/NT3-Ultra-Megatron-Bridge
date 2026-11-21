@@ -21,6 +21,7 @@ from megatron.bridge.perf_recipes.nemotronh.common import (
     _apply_nemotron_3_nano_perf_defaults,
     _apply_nemotron_3_super_perf_defaults,
     _benchmark_common,
+    _enable_nemotron_3_5_lightning_full_iteration,
     _nemotron_3_super_nvfp4_precision,
     _perf_precision,
     load_quantization_recipe,
@@ -250,8 +251,7 @@ def nemotron_3_nano_pretrain_8gpu_b200_bf16_config() -> ConfigContainer:
     return cfg
 
 
-def nemotron_3_nano_pretrain_8gpu_b200_fp8mx_config() -> ConfigContainer:
-    """Nemotron 3 Nano pretrain: 8× B200, MXFP8."""
+def _build_nemotron_3_nano_b200_mxfp8() -> ConfigContainer:
     cfg = nemotron_3_nano_pretrain_config()
     _apply_nemotron_3_nano_perf_defaults(cfg)
     cfg.mixed_precision = _perf_precision("fp8_mx")
@@ -275,6 +275,30 @@ def nemotron_3_nano_pretrain_8gpu_b200_fp8mx_config() -> ConfigContainer:
 
     _benchmark_common(cfg)
     cfg.model.moe_hybridep_num_sms = 32
+    return cfg
+
+
+def nemotron_3_nano_pretrain_8gpu_b200_fp8mx_config() -> ConfigContainer:
+    """Nemotron 3 Nano pretrain: 8× B200, MXFP8 with full-iteration CUDA graph."""
+    cfg = _build_nemotron_3_nano_b200_mxfp8()
+    cfg.model.use_transformer_engine_op_fuser = True
+    cfg.model.moe_mlp_glu_interleave_size = 32
+    cfg.mixed_precision.fp8_dot_product_attention = True
+
+    _enable_nemotron_3_5_lightning_full_iteration(cfg)
+
+    _enable_ncclep(cfg)
+    # Device-side expert token counts: the legacy grouped MLP path syncs tokens_per_expert to the
+    # host every layer, which serializes the CPU behind the GPU when dispatch is fast.
+    cfg.model.moe_use_grouped_tensor = True
+
+    # Run the shared expert on a side stream under the NCCL-EP dispatch/combine kernels, which
+    # occupy only 32 CTAs.
+    cfg.model.moe_shared_expert_overlap = True
+
+    # cuDNN frontend CuTe DSL Mamba-2 conv + scan; needs nvidia-cudnn-frontend>=1.33.0.
+    cfg.model.mamba_kernel_backend = "cudnn"
+
     # Keep process settings next to the recipe so users can see the exact benchmark environment.
     cfg.env_vars = {
         **COMMON_PERF_ENV_VARS,
@@ -282,17 +306,16 @@ def nemotron_3_nano_pretrain_8gpu_b200_fp8mx_config() -> ConfigContainer:
         "CUDA_DEVICE_MAX_CONNECTIONS": 32,
         # CUDA graph and allocator behavior for this recipe.
         "NCCL_GRAPH_REGISTER": 0,
-        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
-        "TORCH_NCCL_AVOID_RECORD_STREAMS": 1,
+        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True,graph_capture_record_stream_reuse:True",
+        "TORCH_NCCL_AVOID_RECORD_STREAMS": 0,
         # NCCL user-buffer and launch settings.
         "NCCL_NVLS_ENABLE": 0,
-        # HybridEP topology for the target system.
-        "NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN": 8,
-        "NUM_OF_TOKENS_PER_CHUNK_COMBINE_API": 128,
-        "NVLINK_DOMAIN_SIZE": 8,
-        "USE_MNNVL": 0,
+        # EP8 stays within one NVL8 domain; enable pull/push mode.
+        "NCCL_EP_HT_EM_PULL_PUSH": 1,
         # Transformer Engine overlap settings for this model.
+        "CUDNNFE_CLUSTER_OVERLAP_MARGIN": 8,
         "NVTE_BWD_LAYERNORM_SM_MARGIN": 20,
+        "NVTE_CUTEDSL_FUSED_GROUPED_MLP": 1,
         "NVTE_FWD_LAYERNORM_SM_MARGIN": 20,
         # Use cuDNN LayerNorm for this measured baseline.
         "NVTE_NORM_BWD_USE_CUDNN": 1,
@@ -385,7 +408,7 @@ def nemotron_3_5_lightning_pretrain_8gpu_b200_bf16_config() -> ConfigContainer:
 
 def nemotron_3_5_lightning_pretrain_8gpu_b200_fp8mx_config() -> ConfigContainer:
     """Nemotron 3.5 Lightning pretrain: 8× B200, MXFP8, NCCL EP."""
-    cfg = _apply_nemotron_3_5_lightning_defaults(nemotron_3_nano_pretrain_8gpu_b200_fp8mx_config())
+    cfg = _apply_nemotron_3_5_lightning_defaults(_build_nemotron_3_nano_b200_mxfp8())
     cfg.model.use_transformer_engine_op_fuser = True
     cfg.mixed_precision.fp8_dot_product_attention = True
     _enable_ncclep(cfg)
