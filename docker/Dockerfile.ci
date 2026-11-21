@@ -285,6 +285,18 @@ RUN --mount=type=bind,from=mok-wheel,source=/opt/mok-wheels,target=/opt/mok-whee
 
 COPY --chown=1000:1000 . /opt/Megatron-Bridge
 
+# Backport NVIDIA/Megatron-LM#9086 (cuDNN Mamba-2 training backend, mamba_kernel_backend="cudnn")
+# onto the pinned MCore, and install the cuDNN Frontend it requires (>= 1.33.0; the lock pins
+# 1.32.0). Runs after the final COPY, which restores the unpatched submodule source. A preserved
+# base runtime keeps its own cuDNN Frontend. Remove once the pins include both.
+RUN --mount=type=bind,source=docker/common/patch_megatron_lm.sh,target=/opt/patch_megatron_lm.sh \
+    --mount=type=bind,source=docker/patches/megatron-lm-cudnn-mamba2.patch,target=/opt/megatron-lm-cudnn-mamba2.patch \
+    bash /opt/patch_megatron_lm.sh /opt/Megatron-Bridge/3rdparty/Megatron-LM /opt/megatron-lm-cudnn-mamba2.patch && \
+    if [ "$MBRIDGE_PRESERVE_BASE_RUNTIME" != "True" ]; then \
+        uv pip install --python "${UV_PROJECT_ENVIRONMENT}/bin/python" --no-deps --no-cache nvidia-cudnn-frontend==1.33.0; \
+    fi && \
+    chown -R 1000:1000 ${UV_PROJECT_ENVIRONMENT}
+
 RUN python /opt/preserve_base_runtime.py check /opt/base-runtime-packages.json
 
 # CI writes coverage beside the checked-out source, installs that source editable into the

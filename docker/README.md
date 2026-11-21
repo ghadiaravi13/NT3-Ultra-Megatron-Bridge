@@ -124,6 +124,21 @@ Mamba, and remove the workaround once the selected release supports the containe
 headers without patching. A plain `uv sync` run later does not apply this Docker-only
 workaround.
 
+### cuDNN Mamba-2 backport
+
+After the final source `COPY`, `common/patch_megatron_lm.sh` applies
+`patches/megatron-lm-cudnn-mamba2.patch` to `3rdparty/Megatron-LM`, which is installed editable.
+The patch is NVIDIA/Megatron-LM#9086 (cuDNN Frontend CuTe DSL Mamba-2 conv + scan, selected with
+`mamba_kernel_backend="cudnn"`) regenerated against the pinned MCore `f1b38a8d8`. The same step
+installs `nvidia-cudnn-frontend==1.33.0`, the minimum that backend accepts, over the locked 1.32.0.
+
+The script skips a checkout that already contains the change and fails the build if the patch
+no longer applies exactly; the applied patch is recorded in
+`3rdparty/Megatron-LM/MBRIDGE_DOCKER_PATCHES`. A preserved base runtime keeps its own cuDNN
+Frontend. A later `uv sync` reinstalls the locked 1.32.0, and environments installed without
+this Dockerfile get neither change. Remove the step, the script, and the patch once the MCore pin
+includes the PR and the lock moves to cuDNN Frontend 1.33.0 or later.
+
 ---
 
 ## NeMo Framework image stack
@@ -264,8 +279,10 @@ docker build \
 | `common/install_mok.sh` | Build and verify the pinned Mixture of Kittens wheel |
 | `common/install_nsys.sh` | Reinstall Nsight Systems from the public NVIDIA CUDA apt repo |
 | `common/install_mamba.sh` | Build the locked Mamba sdist with the local C++ standard patch |
+| `common/patch_megatron_lm.sh` | Apply a Megatron-LM backport to the pinned submodule source |
 | `common/preserve_base_runtime.py` | Record and check selected base package metadata for opt-in runtime preservation |
 | `patches/deepep.patch` | Patch applied to DeepEP during CI image build |
+| `patches/megatron-lm-cudnn-mamba2.patch` | Backport of NVIDIA/Megatron-LM#9086 (cuDNN Mamba-2 backend) onto the pinned MCore |
 | `patches/mok.patch` | MoK dual GPU target build support and PyTorch/CUDA namespace compatibility fix |
 | `patches/mamba.patch` | Let Mamba's CUDA extension inherit PyTorch's C++ standard |
 | `patches/vllm.patch` | Patch applied to vLLM after install in fw-base |
