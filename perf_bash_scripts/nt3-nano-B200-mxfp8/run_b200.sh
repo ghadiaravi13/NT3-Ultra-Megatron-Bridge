@@ -14,12 +14,16 @@
 #           nvidia-cudnn-frontend==1.33.0 -d <dir> && unzip -q <dir>/*.whl -d <dir>/unpacked
 #       MLM_PATH=$PWD/3rdparty/Megatron-LM CUDNN_FE_PATH=<dir>/unpacked/cudnn ./run_b200.sh
 #
-# Usage: CONTAINER=<image> HF_TOKEN=... WANDB_KEY=... [ACCOUNT=...] [PARTITION=...] [DRYRUN=1] ./run_b200.sh
+# Usage: CONTAINER=<image> [ACCOUNT=...] [PARTITION=...] [GRES=gpu:8] [WANDB_KEY=...] [HF_TOKEN=...] [DRYRUN=1] ./run_b200.sh
+#   GRES:      set when the cluster only exposes GPUs through Slurm generic resources.
+#   WANDB_KEY: enables Weights & Biases logging.
+#   HF_TOKEN:  optional; the Nemotron 3 Nano tokenizer is public on Hugging Face.
 
 set -eu
 
-HF_TOKEN="${HF_TOKEN:?Environment variable HF_TOKEN is not set}"
-WANDB_KEY="${WANDB_KEY:?Environment variable WANDB_KEY is not set}"
+HF_TOKEN="${HF_TOKEN:-}"
+WANDB_KEY="${WANDB_KEY:-}"
+GRES="${GRES:-}"
 CONTAINER="${CONTAINER:?Set CONTAINER to an image built from docker/Dockerfile.ci or ./build_container.sh, or a NeMo container plus overlays}"
 
 MBRIDGE_PATH="${MBRIDGE_PATH:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)}"
@@ -38,6 +42,17 @@ COMPUTE_DTYPE="${COMPUTE_DTYPE:-fp8_mx}"
 
 JOB_NAME="nemotron_3_Nano_b200_${COMPUTE_DTYPE}"
 RESULTS_DIR="${RESULTS_DIR:-${MBRIDGE_PATH}/results/${JOB_NAME}}"
+
+OPTIONAL_ARGS=()
+if [ -n "${GRES}" ]; then
+  OPTIONAL_ARGS+=(--gres "${GRES}")
+fi
+if [ -n "${WANDB_KEY}" ]; then
+  OPTIONAL_ARGS+=(--wandb_key "${WANDB_KEY}" --wandb_project_name Nemotron_3_nano_b200_performance)
+fi
+if [ -n "${HF_TOKEN}" ]; then
+  OPTIONAL_ARGS+=(--hf_token "${HF_TOKEN}")
+fi
 
 DRYRUN_FLAG=""
 if [ "${DRYRUN:-0}" = "1" ]; then
@@ -61,10 +76,8 @@ uv run --no-project --with nemo-run --with numpy python "${MBRIDGE_PATH}/scripts
   --max_steps 100 \
   --packager none \
   "${MOUNT_ARGS[@]}" \
-  --wandb_key "${WANDB_KEY}" \
-  --wandb_project_name Nemotron_3_nano_b200_performance \
+  "${OPTIONAL_ARGS[@]}" \
   --wandb_experiment_name shexp_overlap_nccl_ep_cudnn-mamba2_fullcg_nemotron_3_nano_b200_fp8mx \
-  --hf_token "${HF_TOKEN}" \
   --enable_nsys \
   --profiling_start_step 45 \
   --profiling_stop_step 47 \
